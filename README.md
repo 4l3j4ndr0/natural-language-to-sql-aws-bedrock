@@ -29,8 +29,8 @@
 > 1. Clone the repository:
 >
 > ```bash
-> git clone https://github.com/yourusername/natural-language-to-sql.git
-> cd natural-language-to-sql
+> git clone https://github.com/yourusername/natural-language-to-sql-aws-bedrock.git
+> cd natural-language-to-sql-aws-bedrock
 > ```
 >
 > ````
