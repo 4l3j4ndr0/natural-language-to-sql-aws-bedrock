@@ -14,6 +14,8 @@ from botocore.exceptions import ClientError
 from io import StringIO
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
+from datetime import datetime
+from decimal import Decimal
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -155,11 +157,14 @@ class BedrockService:
             str: Generated SQL query
         """
         try:
-            # Create the system prompt with database schema
+            current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # Create the system prompt with database schema and current date
             system_prompt = f"""
             You are an expert SQL assistant that helps users query a MySQL database.
             Your task is to generate a SQL query based on the user's natural language request.
             
+            Current date and time: {current_datetime}
+
             Here is the database schema information:
             {self.db_schema}
             
@@ -169,6 +174,7 @@ class BedrockService:
             3. Use proper table and column names from the schema provided.
             4. DO NOT include any explanations or markdown formatting in your response.
             5. Return ONLY the SQL query as plain text - nothing else.
+            6. If the user request involves dates or time periods like "today", "this month", etc., use the current date provided above.
             
             Generate a SQL query for the following request:
             """
@@ -216,6 +222,40 @@ class BedrockService:
             logger.error(f"Unexpected error in SQL generation: {e}")
             raise
     
+    @staticmethod
+    def serialize_dataframe_results(result_list):
+        """
+        Convierte todos los tipos de datos no serializables a JSON en strings o None
+        sin usar numpy
+        """
+        serialized_results = []
+        
+        for record in result_list:
+            serialized_record = {}
+            for key, value in record.items():
+                # Manejar NaT de pandas
+                if pd.isna(value) or (hasattr(pd, '_libs') and isinstance(value, pd._libs.NaTType)):
+                    serialized_record[key] = None
+                # Manejar Decimals
+                elif isinstance(value, Decimal):
+                    serialized_record[key] = float(value)
+                # Manejar Timestamps de pandas
+                elif isinstance(value, pd.Timestamp):
+                    serialized_record[key] = value.isoformat()
+                # Todos los demás tipos
+                else:
+                    try:
+                        # Verificar si es serializable
+                        json.dumps(value)
+                        serialized_record[key] = value
+                    except (TypeError, OverflowError):
+                        # Si no es serializable, convertir a string
+                        serialized_record[key] = str(value)
+                        
+            serialized_results.append(serialized_record)
+        
+        return serialized_results
+    
     def execute_sql_query(self, sql_query):
         """
         Execute SQL query and return results
@@ -248,6 +288,7 @@ class BedrockService:
                     records = []
                 else:
                     records = df.to_dict(orient='records')
+                    records = self.serialize_dataframe_results(records)
                 
                 return {
                     "query": sql_query,
