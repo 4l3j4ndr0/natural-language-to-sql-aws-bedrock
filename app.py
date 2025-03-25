@@ -63,11 +63,6 @@ def natural_language_sql():
         start_time = time.time()
         result = bedrock_service.natural_language_to_sql_result(natural_language_query)
         processing_time = time.time() - start_time
-        
-        # Generate explanation if requested and if there's no error
-        explanation = None
-        if data.get('explain_results', False) and not result.get('error'):
-            explanation = bedrock_service.explain_sql_results(result)
 
         # Return response
         response = {
@@ -79,10 +74,6 @@ def natural_language_sql():
             'processing_time': processing_time
         }
         
-        # Add explanation if available
-        if explanation:
-            response['explanation'] = explanation
-            
         # Add error if present
         if result.get('error'):
             response['error'] = result.get('error')
